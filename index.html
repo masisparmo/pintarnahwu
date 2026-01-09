@@ -1167,11 +1167,28 @@
 
                 <!-- Canvas Area -->
                 <div class="flex-1 bg-white relative overflow-hidden touch-none" id="canvas-container">
-                    <canvas id="draw-canvas" class="cursor-crosshair w-full h-full"></canvas>
+                    <!-- Guide Layer -->
+                    <div id="guide-layer" class="absolute inset-0 pointer-events-none hidden" style="background-image: repeating-linear-gradient(to bottom, #94a3b8 0, #94a3b8 1px, transparent 1px, transparent 40px); background-position: top 20px;"></div>
+                    <canvas id="draw-canvas" class="cursor-crosshair w-full h-full relative z-10"></canvas>
                 </div>
 
                 <!-- Toolbar -->
                 <div class="p-3 bg-slate-100 border-t border-slate-200 flex-none space-y-3">
+
+                    <!-- Guide Controls Panel (Hidden by default) -->
+                    <div id="guide-controls" class="hidden bg-white p-3 rounded-xl border border-slate-200 shadow-sm mb-2 animate-fade-in">
+                        <div class="flex flex-col gap-3">
+                            <div class="flex items-center justify-between">
+                                <label class="text-xs font-bold text-slate-500">Jarak Garis</label>
+                                <input type="range" id="guide-spacing" min="20" max="100" value="40" class="w-32 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer" oninput="updateGuideSettings()">
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <label class="text-xs font-bold text-slate-500">Transparansi</label>
+                                <input type="range" id="guide-opacity" min="10" max="100" value="30" class="w-32 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer" oninput="updateGuideSettings()">
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="flex flex-wrap justify-between items-center gap-2">
                          <!-- Tools: Pen & Eraser -->
                          <div class="flex gap-2 bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
@@ -1179,11 +1196,12 @@
                              <button id="btn-tool-eraser" onclick="setTool('eraser')" class="w-10 h-10 rounded-md hover:bg-slate-100 text-slate-500 border border-transparent transition" title="Penghapus"><i class="fa-solid fa-eraser"></i></button>
                          </div>
 
-                         <!-- Undo/Redo/Trash -->
+                         <!-- Undo/Redo/Trash/Guide -->
                          <div class="flex gap-2">
                              <button onclick="undoDraw()" class="w-10 h-10 bg-white border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-50 shadow-sm" title="Undo"><i class="fa-solid fa-rotate-left"></i></button>
                              <button onclick="redoDraw()" class="w-10 h-10 bg-white border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-50 shadow-sm" title="Redo"><i class="fa-solid fa-rotate-right"></i></button>
                              <button onclick="clearCanvas()" class="w-10 h-10 bg-red-100 border border-red-200 rounded-lg text-red-600 hover:bg-red-50 shadow-sm" title="Hapus Semua"><i class="fa-solid fa-trash-can"></i></button>
+                             <button id="btn-toggle-guide" onclick="toggleGuides()" class="w-10 h-10 bg-white border border-slate-300 rounded-lg text-slate-400 hover:text-primary hover:bg-slate-50 shadow-sm transition" title="Garis Bantu"><i class="fa-solid fa-bars"></i></button>
                          </div>
 
                          <!-- Slider -->
@@ -1813,6 +1831,12 @@
             clearCanvas(false); // Reset but keep context styles
             setTool('pen'); // Default to pen
 
+            // Reset Guide UI
+            document.getElementById('guide-controls').classList.add('hidden');
+            document.getElementById('guide-layer').classList.add('hidden');
+            document.getElementById('btn-toggle-guide').classList.remove('text-primary', 'bg-slate-50', 'border-primary');
+            document.getElementById('btn-toggle-guide').classList.add('text-slate-400');
+
             // Re-bind events just in case
              canvas.addEventListener('mousedown', startDrawing);
              canvas.addEventListener('mousemove', draw);
@@ -1839,9 +1863,8 @@
             ctx.lineWidth = document.getElementById('pen-size').value;
             ctx.strokeStyle = '#000000';
 
-            // Fill white background (important for JPEG export)
-            ctx.fillStyle = '#FFFFFF';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // Clear canvas (transparent background)
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             saveState(); // Initial empty state
         }
@@ -1857,13 +1880,43 @@
                 btnPen.className = "w-10 h-10 rounded-md bg-blue-100 text-blue-600 border border-blue-200 transition shadow-sm";
                 btnEraser.className = "w-10 h-10 rounded-md hover:bg-slate-100 text-slate-500 border border-transparent transition";
                 ctx.strokeStyle = '#000000';
+                ctx.globalCompositeOperation = 'source-over';
             } else {
                 btnPen.className = "w-10 h-10 rounded-md hover:bg-slate-100 text-slate-500 border border-transparent transition";
                 btnEraser.className = "w-10 h-10 rounded-md bg-blue-100 text-blue-600 border border-blue-200 transition shadow-sm";
-                ctx.strokeStyle = '#FFFFFF'; // Eraser paints white
+                // Eraser logic: Make pixels transparent to reveal background/guides
+                ctx.globalCompositeOperation = 'destination-out';
             }
 
             updateCursor();
+        }
+
+        function toggleGuides() {
+            const layer = document.getElementById('guide-layer');
+            const controls = document.getElementById('guide-controls');
+            const btn = document.getElementById('btn-toggle-guide');
+
+            layer.classList.toggle('hidden');
+            controls.classList.toggle('hidden');
+
+            if (!layer.classList.contains('hidden')) {
+                btn.classList.add('text-primary', 'bg-slate-50', 'border-primary');
+                btn.classList.remove('text-slate-400');
+                updateGuideSettings(); // Apply initial settings
+            } else {
+                btn.classList.remove('text-primary', 'bg-slate-50', 'border-primary');
+                btn.classList.add('text-slate-400');
+            }
+        }
+
+        function updateGuideSettings() {
+            const spacing = document.getElementById('guide-spacing').value;
+            const opacity = document.getElementById('guide-opacity').value / 100;
+            const layer = document.getElementById('guide-layer');
+
+            // Repeating linear gradient for lines
+            // Line color is #94a3b8 (slate-400), line thickness 1px
+            layer.style.backgroundImage = `repeating-linear-gradient(to bottom, rgba(148, 163, 184, ${opacity}) 0, rgba(148, 163, 184, ${opacity}) 1px, transparent 1px, transparent ${spacing}px)`;
         }
 
         function updateCursor() {
@@ -1967,14 +2020,26 @@
         }
 
         function clearCanvas(save = true) {
-            ctx.fillStyle = '#FFFFFF';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
             if(save) saveState();
         }
 
         function processDrawing() {
-            // Get base64 (JPEG is smaller and good for handwriting)
-            const dataURL = canvas.toDataURL('image/jpeg', 0.8);
+            // Composite transparent canvas onto white background for AI
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+            const tempCtx = tempCanvas.getContext('2d');
+
+            // Fill white
+            tempCtx.fillStyle = '#FFFFFF';
+            tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+
+            // Draw original canvas
+            tempCtx.drawImage(canvas, 0, 0);
+
+            // Get base64
+            const dataURL = tempCanvas.toDataURL('image/jpeg', 0.8);
             const base64 = dataURL.split(',')[1];
 
             closeDrawingModal();
