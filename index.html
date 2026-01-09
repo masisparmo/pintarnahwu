@@ -1827,9 +1827,13 @@
 
         function openDrawingModal() {
             document.getElementById('drawing-modal').classList.remove('hidden');
-            resizeCanvas();
-            clearCanvas(false); // Reset but keep context styles
-            setTool('pen'); // Default to pen
+
+            // Wait for layout transition to finish/stabilize before sizing canvas
+            setTimeout(() => {
+                resizeCanvas();
+                clearCanvas(false); // Reset but keep context styles
+                setTool('pen'); // Default to pen
+            }, 50);
 
             // Reset Guide UI
             document.getElementById('guide-controls').classList.add('hidden');
@@ -1946,45 +1950,54 @@
             updateCursor();
         }
 
+        function getCanvasCoordinates(e) {
+            const rect = canvas.getBoundingClientRect();
+            let clientX, clientY;
+
+            if (e.touches && e.touches.length > 0) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            } else {
+                clientX = e.clientX;
+                clientY = e.clientY;
+            }
+
+            // Map coordinates to internal canvas resolution
+            const x = (clientX - rect.left) * (canvas.width / rect.width);
+            const y = (clientY - rect.top) * (canvas.height / rect.height);
+
+            return { x, y };
+        }
+
         function startDrawing(e) {
             isDrawing = true;
-            [lastX, lastY] = [e.offsetX, e.offsetY];
+            const pos = getCanvasCoordinates(e);
+            [lastX, lastY] = [pos.x, pos.y];
             // Ensure proper color on start
             ctx.strokeStyle = (currentTool === 'pen') ? '#000000' : '#FFFFFF';
         }
 
         function startDrawingTouch(e) {
             e.preventDefault();
-            isDrawing = true;
-            const rect = canvas.getBoundingClientRect();
-            const touch = e.touches[0];
-            lastX = touch.clientX - rect.left;
-            lastY = touch.clientY - rect.top;
+            startDrawing(e);
         }
 
         function draw(e) {
             if (!isDrawing) return;
+            const pos = getCanvasCoordinates(e);
+
             ctx.beginPath();
             ctx.moveTo(lastX, lastY);
-            ctx.lineTo(e.offsetX, e.offsetY);
+            ctx.lineTo(pos.x, pos.y);
             ctx.stroke();
-            [lastX, lastY] = [e.offsetX, e.offsetY];
+
+            [lastX, lastY] = [pos.x, pos.y];
         }
 
         function drawTouch(e) {
             if (!isDrawing) return;
             e.preventDefault();
-            const rect = canvas.getBoundingClientRect();
-            const touch = e.touches[0];
-            const x = touch.clientX - rect.left;
-            const y = touch.clientY - rect.top;
-
-            ctx.beginPath();
-            ctx.moveTo(lastX, lastY);
-            ctx.lineTo(x, y);
-            ctx.stroke();
-            lastX = x;
-            lastY = y;
+            draw(e);
         }
 
         function stopDrawing() {
