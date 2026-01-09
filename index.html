@@ -1172,15 +1172,24 @@
 
                 <!-- Toolbar -->
                 <div class="p-3 bg-slate-100 border-t border-slate-200 flex-none space-y-3">
-                    <div class="flex justify-between items-center gap-2">
+                    <div class="flex flex-wrap justify-between items-center gap-2">
+                         <!-- Tools: Pen & Eraser -->
+                         <div class="flex gap-2 bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
+                             <button id="btn-tool-pen" onclick="setTool('pen')" class="w-10 h-10 rounded-md bg-blue-100 text-blue-600 border border-blue-200 transition" title="Pen"><i class="fa-solid fa-pen"></i></button>
+                             <button id="btn-tool-eraser" onclick="setTool('eraser')" class="w-10 h-10 rounded-md hover:bg-slate-100 text-slate-500 border border-transparent transition" title="Penghapus"><i class="fa-solid fa-eraser"></i></button>
+                         </div>
+
+                         <!-- Undo/Redo/Trash -->
                          <div class="flex gap-2">
                              <button onclick="undoDraw()" class="w-10 h-10 bg-white border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-50 shadow-sm" title="Undo"><i class="fa-solid fa-rotate-left"></i></button>
                              <button onclick="redoDraw()" class="w-10 h-10 bg-white border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-50 shadow-sm" title="Redo"><i class="fa-solid fa-rotate-right"></i></button>
                              <button onclick="clearCanvas()" class="w-10 h-10 bg-red-100 border border-red-200 rounded-lg text-red-600 hover:bg-red-50 shadow-sm" title="Hapus Semua"><i class="fa-solid fa-trash-can"></i></button>
                          </div>
-                         <div class="flex items-center gap-2 flex-1 justify-end">
+
+                         <!-- Slider -->
+                         <div class="flex items-center gap-2 min-w-[100px]">
                              <span class="text-xs font-bold text-slate-500"><i class="fa-solid fa-circle text-[5px]"></i></span>
-                             <input type="range" id="pen-size" min="2" max="10" value="4" class="w-24 h-2 bg-slate-300 rounded-lg appearance-none cursor-pointer" oninput="changePenSize(this.value)">
+                             <input type="range" id="pen-size" min="5" max="50" value="10" class="w-24 h-2 bg-slate-300 rounded-lg appearance-none cursor-pointer" oninput="changePenSize(this.value)">
                              <span class="text-xs font-bold text-slate-500"><i class="fa-solid fa-circle text-[10px]"></i></span>
                          </div>
                     </div>
@@ -1791,6 +1800,7 @@
         const canvas = document.getElementById('draw-canvas');
         const ctx = canvas.getContext('2d');
         let isDrawing = false;
+        let currentTool = 'pen'; // 'pen' or 'eraser'
         let lastX = 0;
         let lastY = 0;
         let undoStack = [];
@@ -1801,6 +1811,7 @@
             document.getElementById('drawing-modal').classList.remove('hidden');
             resizeCanvas();
             clearCanvas(false); // Reset but keep context styles
+            setTool('pen'); // Default to pen
 
             // Re-bind events just in case
              canvas.addEventListener('mousedown', startDrawing);
@@ -1835,13 +1846,54 @@
             saveState(); // Initial empty state
         }
 
+        function setTool(tool) {
+            currentTool = tool;
+
+            // Update UI buttons
+            const btnPen = document.getElementById('btn-tool-pen');
+            const btnEraser = document.getElementById('btn-tool-eraser');
+
+            if (tool === 'pen') {
+                btnPen.className = "w-10 h-10 rounded-md bg-blue-100 text-blue-600 border border-blue-200 transition shadow-sm";
+                btnEraser.className = "w-10 h-10 rounded-md hover:bg-slate-100 text-slate-500 border border-transparent transition";
+                ctx.strokeStyle = '#000000';
+            } else {
+                btnPen.className = "w-10 h-10 rounded-md hover:bg-slate-100 text-slate-500 border border-transparent transition";
+                btnEraser.className = "w-10 h-10 rounded-md bg-blue-100 text-blue-600 border border-blue-200 transition shadow-sm";
+                ctx.strokeStyle = '#FFFFFF'; // Eraser paints white
+            }
+
+            updateCursor();
+        }
+
+        function updateCursor() {
+            const size = parseInt(document.getElementById('pen-size').value);
+            let svg = '';
+
+            if (currentTool === 'pen') {
+                // Pen: Black circle with Yellow border
+                svg = `<svg width="${size+4}" height="${size+4}" viewBox="0 0 ${size+4} ${size+4}" xmlns="http://www.w3.org/2000/svg"><circle cx="${size/2+2}" cy="${size/2+2}" r="${size/2}" fill="black" stroke="yellow" stroke-width="2"/></svg>`;
+            } else {
+                // Eraser: White circle with Black border
+                svg = `<svg width="${size+4}" height="${size+4}" viewBox="0 0 ${size+4} ${size+4}" xmlns="http://www.w3.org/2000/svg"><circle cx="${size/2+2}" cy="${size/2+2}" r="${size/2}" fill="white" stroke="black" stroke-width="2"/></svg>`;
+            }
+
+            const encoded = encodeURIComponent(svg);
+            const hotX = size/2 + 2;
+            const hotY = size/2 + 2;
+            canvas.style.cursor = `url('data:image/svg+xml;utf8,${encoded}') ${hotX} ${hotY}, auto`;
+        }
+
         function changePenSize(size) {
             ctx.lineWidth = size;
+            updateCursor();
         }
 
         function startDrawing(e) {
             isDrawing = true;
             [lastX, lastY] = [e.offsetX, e.offsetY];
+            // Ensure proper color on start
+            ctx.strokeStyle = (currentTool === 'pen') ? '#000000' : '#FFFFFF';
         }
 
         function startDrawingTouch(e) {
